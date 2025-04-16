@@ -1,34 +1,55 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>Redirecting to Stripe...</title>
+  <meta charset="utf-8">
+  <title>Secure Payment</title>
   <script src="https://js.stripe.com/v3/"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    #card-element { margin-bottom: 20px; }
+    #submit { padding: 10px 20px; font-size: 16px; }
+  </style>
 </head>
 <body>
-  <p>Please wait... redirecting you to secure payment.</p>
-  <div id="error" style="color:red;"></div>
+  <h2>Complete Your Payment</h2>
+  <form id="payment-form">
+    <div id="card-element"><!-- Stripe Card Element --></div>
+    <button type="submit" id="submit">Pay</button>
+    <div id="error-message" style="color: red;"></div>
+    <div id="success-message" style="color: green;"></div>
+  </form>
 
   <script>
-    // ✅ Replace this with your Stripe **public key**
-    const stripe = Stripe('pk_live_FUhsUZlAyizwvvH03O2zXnbS'); 
+    const stripe = Stripe('pk_live_FUhsUZlAyizwvvH03O2zXnbS'); // 🔁 Replace this with your public key
 
-    // ✅ This reads the session ID from the page URL, e.g. ?session_id=cs_test_abc123
     const params = new URLSearchParams(window.location.search);
-    const sessionId = params.get('session_id');
+    const clientSecret = params.get('client_secret');
 
-    // ✅ If a session ID exists, redirect to Stripe Checkout
-    if (sessionId) {
-      stripe.redirectToCheckout({ sessionId })
-        .then(function(result) {
-          if (result.error) {
-            document.getElementById('error').innerText = result.error.message;
-          }
-        });
-    } else {
-      // ❌ If no session ID was provided, show an error
-      document.getElementById('error').innerText = "Missing or invalid session ID.";
+    if (!clientSecret) {
+      document.getElementById('error-message').textContent = 'Missing client secret!';
+      throw new Error('No client secret provided.');
     }
+
+    const elements = stripe.elements();
+    const card = elements.create('card');
+    card.mount('#card-element');
+
+    const form = document.getElementById('payment-form');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const {error, paymentIntent} = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: {
+          card: card,
+        }
+      });
+
+      if (error) {
+        document.getElementById('error-message').textContent = error.message;
+      } else if (paymentIntent.status === 'succeeded') {
+        document.getElementById('success-message').textContent = 'Payment successful! Thank you.';
+        document.getElementById('submit').disabled = true;
+      }
+    });
   </script>
 </body>
 </html>
