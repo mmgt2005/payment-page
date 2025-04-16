@@ -1,53 +1,162 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Secure Payment</title>
+  <meta charset="UTF-8" />
+  <title>Stripe Payment</title>
   <script src="https://js.stripe.com/v3/"></script>
   <style>
-    body { font-family: sans-serif; padding: 20px; }
-    #card-element { margin-bottom: 20px; }
-    #submit { padding: 10px 20px; font-size: 16px; }
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 500px;
+      margin: 0 auto;
+      padding: 1em;
+    }
+    .product {
+      display: flex;
+      align-items: center;
+      margin-bottom: 1em;
+    }
+    .product img {
+      width: 80px;
+      height: 80px;
+      object-fit: cover;
+      margin-right: 1em;
+      border-radius: 8px;
+    }
+    .product-info {
+      flex-grow: 1;
+    }
+    label {
+      display: block;
+      margin: 1em 0 0.5em;
+    }
+    input[type="text"], input[type="email"] {
+      width: 100%;
+      padding: 0.5em;
+      box-sizing: border-box;
+    }
+    .total {
+      font-weight: bold;
+      font-size: 1.2em;
+      margin-top: 1em;
+    }
+    #card-element {
+      margin: 1em 0;
+    }
+    button {
+      background-color: #6772e5;
+      color: white;
+      border: none;
+      padding: 0.75em 1em;
+      font-size: 1em;
+      border-radius: 4px;
+      cursor: pointer;
+      width: 100%;
+    }
+    #error-message, #success-message {
+      color: red;
+      margin-top: 1em;
+    }
+    #success-message {
+      color: green;
+    }
   </style>
 </head>
 <body>
-  <h2>Complete Your Payment</h2>
+  <h2>Complete your payment</h2>
   <form id="payment-form">
-    <div id="card-element"><!-- Stripe Card Element --></div>
-    <button type="submit" id="submit">Pay</button>
-    <div id="error-message" style="color: red;"></div>
-    <div id="success-message" style="color: green;"></div>
+    <label>
+      Name on Card
+      <input type="text" id="cardholder-name" placeholder="Jane Doe" required />
+    </label>
+
+    <label>
+      Email
+      <input type="email" id="email" placeholder="jane@example.com" required />
+    </label>
+
+    <div id="product-list"></div>
+    <div class="total" id="total-amount">Total: $0.00</div>
+
+    <div id="card-element"></div>
+
+    <button type="submit" id="submit">Pay Now</button>
+    <div id="error-message"></div>
+    <div id="success-message"></div>
   </form>
 
   <script>
-    const stripe = Stripe('pk_live_FUhsUZlAyizwvvH03O2zXnbS'); // 🔁 Replace this with your public key
-
-    const params = new URLSearchParams(window.location.search);
-    const clientSecret = params.get('client_secret');
-
-    if (!clientSecret) {
-      document.getElementById('error-message').textContent = 'Missing client secret!';
-      throw new Error('No client secret provided.');
-    }
+    const stripe = Stripe('pk_test_YOUR_PUBLIC_KEY'); // Replace with your public key
 
     const elements = stripe.elements();
     const card = elements.create('card');
     card.mount('#card-element');
 
+    const urlParams = new URLSearchParams(window.location.search);
+    const clientSecret = urlParams.get('session');
+
+    const productsParam = urlParams.get("products");
+    let products = [];
+
+    try {
+      products = JSON.parse(decodeURIComponent(productsParam));
+    } catch (e) {
+      console.error("Invalid products parameter", e);
+    }
+
+    const productList = document.getElementById('product-list');
+    const totalAmountEl = document.getElementById('total-amount');
+
+    function renderProducts() {
+      productList.innerHTML = '';
+      products.forEach(product => {
+        const div = document.createElement('div');
+        div.className = 'product';
+        div.innerHTML = `
+          <img src="${product.image}" alt="${product.name}">
+          <div class="product-info">
+            <strong>${product.name}</strong><br>
+            <span>$${(product.amount / 100).toFixed(2)}</span><br>
+            Qty: ${product.quantity}
+          </div>
+        `;
+        productList.appendChild(div);
+      });
+    }
+
+    function calculateTotal() {
+      let total = 0;
+      products.forEach(product => {
+        total += product.amount * product.quantity;
+      });
+      totalAmountEl.textContent = `Total: $${(total / 100).toFixed(2)}`;
+    }
+
+    renderProducts();
+    calculateTotal();
+
     const form = document.getElementById('payment-form');
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
+      const name = document.getElementById('cardholder-name').value;
+      const email = document.getElementById('email').value;
+
       const {error, paymentIntent} = await stripe.confirmCardPayment(clientSecret, {
         payment_method: {
           card: card,
+          billing_details: {
+            name: name,
+            email: email
+          }
         }
       });
 
       if (error) {
         document.getElementById('error-message').textContent = error.message;
-      } else if (paymentIntent.status === 'succeeded') {
-        document.getElementById('success-message').textContent = 'Payment successful! Thank you.';
-        document.getElementById('submit').disabled = true;
+      } else {
+        document.getElementById('success-message').textContent = "✅ Payment successful!";
+        form.reset();
+        card.clear();
       }
     });
   </script>
